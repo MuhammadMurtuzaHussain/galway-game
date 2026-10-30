@@ -10,6 +10,7 @@ import { Hud, ZONES } from './hud.js';
 import { buildLandmarks, paintLongWalk, REPLACED_BUILDINGS } from './landmarks.js';
 import { Net, SHIRTS } from './net.js';
 import { buildSigns } from './signs.js';
+import { Life } from './life.js';
 
 const status = document.getElementById('load-status');
 const setStatus = (s) => { status.textContent = s; };
@@ -69,6 +70,7 @@ const input = new Input(canvas);
 const player = new Player(scene, collision, ground.isWater, map.bounds);
 const follow = new FollowCamera(camera, collision);
 const hud = new Hud(map, ground.radar);
+const life = new Life(scene, map, collision, ground.isWater);
 
 // Teleport spots: the nearest street point to each zone (streets are outdoors).
 function streetPointNear(x, z) {
@@ -298,6 +300,7 @@ function loop(now) {
   updateSplashes(dt);
   landmarks.update(dt, now / 1000, player.pos);
   net.update(dt, now, player, camera);
+  life.update(dt, now / 1000, player);
   ground.update(now / 1000);
   hud.update(dt, player, follow.yaw, sky.clock);
 
@@ -314,4 +317,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy for debugging from the console
-Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs } });
+Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life } });

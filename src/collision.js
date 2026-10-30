@@ -8,6 +8,7 @@ const STEP = 0.55; // how high you can step up without jumping
 export class CollisionWorld {
   constructor() {
     this.cells = new Map();
+    this.dynamic = []; // moving circles (cars), refilled every frame: { x, z, r }
   }
 
   key(cx, cz) {
@@ -118,6 +119,16 @@ export class CollisionWorld {
           }
         }
       });
+      if (y < 1.5)
+        for (const o of this.dynamic) {
+          const ex = x - o.x, ez = z - o.z, rr = r + o.r, d2 = ex * ex + ez * ez;
+          if (d2 < rr * rr) {
+            const d = Math.sqrt(d2) || 1e-4;
+            x = o.x + (ex / d) * rr;
+            z = o.z + (ez / d) * rr;
+            moved = true;
+          }
+        }
       if (!moved) break;
     }
     return [x, z];
