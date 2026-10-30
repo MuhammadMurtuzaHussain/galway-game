@@ -231,10 +231,14 @@ export class Life {
 
   // nearest pub, gull and vehicle distances, for the sound mix
   nearest(x, z) {
-    let gull = Infinity, car = Infinity;
-    for (const g of this.gulls) if (g.placed) gull = Math.min(gull, Math.hypot(g.x - x, g.z - z) + Math.abs(g.y) * 0.5);
+    let gull = Infinity, gx = x, gz = z, car = Infinity;
+    for (const g of this.gulls) {
+      if (!g.placed) continue;
+      const d = Math.hypot(g.x - x, g.z - z) + Math.abs(g.y) * 0.5;
+      if (d < gull) { gull = d; gx = g.x; gz = g.z; }
+    }
     for (const d of this.vehicles) if (d.placed) car = Math.min(car, Math.hypot(d.x - x, d.z - z));
-    return { gull, car };
+    return { gull, gx, gz, car };
   }
 
   update(dt, t, player) {

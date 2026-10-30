@@ -11,6 +11,7 @@ import { buildLandmarks, paintLongWalk, REPLACED_BUILDINGS } from './landmarks.j
 import { Net, SHIRTS } from './net.js';
 import { buildSigns } from './signs.js';
 import { Life } from './life.js';
+import { Sound } from './sound.js';
 
 const status = document.getElementById('load-status');
 const setStatus = (s) => { status.textContent = s; };
@@ -71,6 +72,29 @@ const player = new Player(scene, collision, ground.isWater, map.bounds);
 const follow = new FollowCamera(camera, collision);
 const hud = new Hud(map, ground.radar);
 const life = new Life(scene, map, collision, ground.isWater);
+const sound = new Sound();
+const pubs = map.pois.filter((p) => p[2] === 'pub' || p[2] === 'bar');
+const mix = { sea: 0, height: 0, car: Infinity, gull: Infinity, gullPan: 0, pub: Infinity, rain: 0 };
+let mixTimer = 0;
+// what the player can hear: how close the sea, pubs, gulls and cars are
+function updateMix(dt) {
+  const { x, y, z } = player.pos;
+  mix.height = Math.max(0, y);
+  const n = life.nearest(x, z);
+  mix.car = n.car;
+  mix.gull = n.gull;
+  const gd = Math.hypot(n.gx - x, n.gz - z) || 1;
+  mix.gullPan = ((n.gx - x) * Math.cos(follow.yaw) - (n.gz - z) * Math.sin(follow.yaw)) / gd;
+  if ((mixTimer -= dt) > 0) return;
+  mixTimer = 0.3;
+  let sea = 0;
+  for (const r of [4, 12, 25, 45, 70])
+    for (let a = 0; a < 8; a++)
+      if (ground.isWater(x + Math.cos(a * 0.785) * r, z + Math.sin(a * 0.785) * r)) sea = Math.max(sea, 1 - r / 80);
+  mix.sea = player.swimming ? 1 : sea;
+  mix.pub = Infinity;
+  for (const p of pubs) mix.pub = Math.min(mix.pub, Math.hypot(p[0] - x, p[1] - z));
+}
 
 // Teleport spots: the nearest street point to each zone (streets are outdoors).
 function streetPointNear(x, z) {
@@ -258,6 +282,7 @@ const start = () => {
   nick.blur();
   input.pressed.delete('Enter'); // the Enter that starts the game shouldn't also open chat
   net.connect(name || 'Galwegian', shirt);
+  sound.start();
 };
 document.getElementById('who').addEventListener('click', (e) => e.stopPropagation());
 title.addEventListener('click', start);
@@ -278,6 +303,7 @@ function loop(now) {
   if (started) {
     if ((input.pressed.has('Enter') || input.pressed.has('NumpadEnter')) && !chatOpen()) openChat();
     if (input.pressed.has('KeyH')) help.classList.toggle('hidden');
+    if (input.pressed.has('KeyM')) hud.flash(sound.toggleMute() ? 'Sound off' : 'Sound on');
     if (input.pressed.has('KeyT')) sky.hour = (sky.hour + 2) % 24;
     for (let i = 0; i < FAST_TRAVEL.length; i++) {
       if (input.pressed.has('Digit' + (i + 1))) {
@@ -301,6 +327,8 @@ function loop(now) {
   landmarks.update(dt, now / 1000, player.pos);
   net.update(dt, now, player, camera);
   life.update(dt, now / 1000, player);
+  updateMix(dt);
+  sound.update(dt, now / 1000, mix);
   ground.update(now / 1000);
   hud.update(dt, player, follow.yaw, sky.clock);
 
@@ -317,4 +345,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy for debugging from the console
-Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life } });
+Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life, sound, mix } });
