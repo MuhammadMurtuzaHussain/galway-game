@@ -21,7 +21,9 @@ name tags, and Enter opens chat. No accounts.
 - **Same Wi-Fi:** run `npx vite --host`, then friends open the `Network:` address it prints.
 - **Private room:** add `?room=anything` to the address. Only people with the same room see you.
 - **Online:** the game is on Vercel (galway-game.vercel.app) and the multiplayer server on
-  Render (galway-game-mp.onrender.com, free plan, Frankfurt). Both redeploy on every push to `main`.
+  Render (galway-game-mp.onrender.com, free plan, Frankfurt). Vercel redeploys on every push to
+  `main`. Render doesn't get push events for this repo, so after changing `server/`, redeploy it
+  with "Manual Deploy" on the Render dashboard (or ask Claude to).
   The game is built with `VITE_MP_URL=wss://galway-game-mp.onrender.com/mp` (a Vercel env var).
   Render's free plan sleeps after 15 idle minutes, so the first player of the day waits about a
   minute for "online" to appear; the game is playable meanwhile. Without a server the game still
