@@ -131,9 +131,9 @@ class Mover {
 
 class Walker extends Mover {
   offset(r) {
-    if (r.k === 'pedestrian') return this.lane * 2.2;
-    if (r.k === 'footway' || r.k === 'path') return this.lane * 0.5;
-    return r.w / 2 + 1.4; // the pavement on their left
+    if (r.k === 'pedestrian') return this.lane * 2.2 + this.jit;
+    if (r.k === 'footway' || r.k === 'path') return this.lane * 0.5 + this.jit * 0.5;
+    return r.w / 2 + 1.4 + this.jit * 0.5; // the pavement on their left
   }
 }
 
@@ -174,14 +174,24 @@ export class Life {
       head: instanced(part(0.27, 0.3, 0.28), P),
       hair: instanced(part(0.29, 0.12, 0.3), P),
     };
+    // umbrellas, for when it rains (most people carry one; it's Galway)
+    this.brolly = {
+      canopy: instanced(new THREE.ConeGeometry(0.58, 0.32, 8, 1, true), P),
+      stick: instanced(part(0.03, 0.75, 0.03, 0, -0.37), P, '#2a2a2a'),
+    };
+    this.brolly.canopy.material.side = THREE.DoubleSide;
+    Object.assign(this.body, this.brolly);
     for (const m of Object.values(this.body)) this.group.add(m);
     this.people = [];
     for (let i = 0; i < P; i++) {
       const w = new Walker();
       w.lane = Math.random() < 0.5 ? -1 : 1;
+      w.jit = (Math.random() - 0.5) * 1.2;
       w.speed = 1.1 + Math.random() * 0.6;
       w.phase = Math.random() * 6;
       w.placed = false;
+      w.umbrella = Math.random() < 0.7;
+      this.brolly.canopy.setColorAt(i, _c.set(pick(['#1d1d1f', '#7a1f2b', '#2d5f9a', '#2f7a3f', '#d9a33b', '#c96f9a', '#e8e2d2'])));
       const shirt = pick(SHIRTS), pants = pick(PANTS), skin = pick(SKINS), hair = pick(HAIRS);
       this.body.torso.setColorAt(i, _c.set(shirt));
       this.body.head.setColorAt(i, _c.set(skin));
@@ -241,7 +251,8 @@ export class Life {
     return { gull, gx, gz, car };
   }
 
-  update(dt, t, player) {
+  update(dt, t, player, rain = 0) {
+    this.rain = rain;
     const px = player.pos.x, pz = player.pos.z;
     // after fast travel, fill the new place straight away
     if (this.last && Math.hypot(px - this.last[0], pz - this.last[1]) > 60) {
@@ -261,6 +272,9 @@ export class Life {
         const s = this.walkNet.spawnNear(px, pz, w.placed ? 70 : 6, 125, 30, busy);
         if (!s) return;
         w.place(this.walkNet, s.ri, s.v, Math.random() < 0.5 ? 1 : -1);
+        // scatter along the street so a crowd doesn't appear on one spot
+        w.update(this.walkNet, Math.random() * 25, 0.25);
+        w.x = w.tx; w.z = w.tz; w.h = w.th;
         w.placed = true;
       }
       // stop for a moment if the player is right in front
@@ -277,12 +291,21 @@ export class Life {
       B.torso.setMatrixAt(i, _m.copy(_r).multiply(_l.makeTranslation(0, 1.26, 0)));
       B.head.setMatrixAt(i, _m.copy(_r).multiply(_l.makeTranslation(0, 1.75, 0)));
       B.hair.setMatrixAt(i, _m.copy(_r).multiply(_l.makeTranslation(0, 1.92, -0.01)));
+      const brolly = w.umbrella && this.rain > 0.15;
       for (const k of [0, 1]) {
         const side = k ? 1 : -1, a = k ? swing : -swing;
         _l.makeRotationX(a).setPosition(0.11 * side, 0.95, 0);
         B.legs.setMatrixAt(i * 2 + k, _m.copy(_r).multiply(_l));
-        _l.makeRotationX(-a * 0.9).setPosition(0.33 * side, 1.53, 0);
+        _l.makeRotationX(brolly && k === 0 ? -1.9 : -a * 0.9).setPosition(0.33 * side, 1.53, 0);
         B.arms.setMatrixAt(i * 2 + k, _m.copy(_r).multiply(_l));
+      }
+      if (brolly) {
+        B.canopy.setMatrixAt(i, _m.copy(_r).multiply(_l.makeTranslation(-0.2, 2.35, 0.25)));
+        B.stick.setMatrixAt(i, _m.copy(_r).multiply(_l.makeTranslation(-0.2, 2.2, 0.25)));
+      } else {
+        _m.makeScale(0, 0, 0);
+        B.canopy.setMatrixAt(i, _m);
+        B.stick.setMatrixAt(i, _m);
       }
     });
     for (const m of Object.values(B)) m.instanceMatrix.needsUpdate = true;

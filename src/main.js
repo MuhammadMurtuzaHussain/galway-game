@@ -13,6 +13,7 @@ import { buildSigns } from './signs.js';
 import { Life } from './life.js';
 import { Sound } from './sound.js';
 import { Details } from './details.js';
+import { Weather } from './weather.js';
 
 const status = document.getElementById('load-status');
 const setStatus = (s) => { status.textContent = s; };
@@ -74,6 +75,7 @@ const follow = new FollowCamera(camera, collision);
 const hud = new Hud(map, ground.radar);
 const life = new Life(scene, map, collision, ground.isWater);
 const details = new Details(scene, map, collision, signs.userData.fronts);
+const weather = new Weather(scene);
 const sound = new Sound();
 const pubs = map.pois.filter((p) => p[2] === 'pub' || p[2] === 'bar');
 const mix = { sea: 0, height: 0, car: Infinity, gull: Infinity, gullPan: 0, pub: Infinity, busker: Infinity, rain: 0 };
@@ -357,6 +359,10 @@ function loop(now) {
     if (input.pressed.has('KeyH')) help.classList.toggle('hidden');
     if (input.pressed.has('KeyM')) hud.flash(sound.toggleMute() ? 'Sound off' : 'Sound on');
     if (input.pressed.has('Tab')) togglePlayers();
+    if (input.pressed.has('KeyR')) {
+      const o = weather.toggle();
+      hud.flash(o === null ? 'Weather: as it comes' : o ? 'Here comes the rain' : 'Dry spell');
+    }
     for (const [code, k] of Object.entries(EMOTES)) if (input.pressed.has(code)) doEmote(k);
     if (playersEl.classList.contains('open') && (playersTimer -= dt) < 0) { playersTimer = 1; renderPlayers(); }
     if (input.pressed.has('KeyT')) sky.hour = (sky.hour + 2) % 24;
@@ -382,7 +388,10 @@ function loop(now) {
   landmarks.update(dt, now / 1000, player.pos);
   net.update(dt, now, player, camera);
   hud.others = [...net.remotes.values()].filter((r) => r.target).map((r) => ({ x: r.pos.x, z: r.pos.z, color: r.color }));
-  life.update(dt, now / 1000, player);
+  weather.update(dt, camera, 1 - sky.night * 0.7);
+  sky.rain = weather.rain;
+  mix.rain = weather.rain;
+  life.update(dt, now / 1000, player, weather.rain);
   details.update(dt, now / 1000, player);
   updateMix(dt);
   sound.update(dt, now / 1000, mix);
@@ -402,4 +411,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy for debugging from the console
-Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life, sound, mix, details } });
+Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life, sound, mix, details, weather } });

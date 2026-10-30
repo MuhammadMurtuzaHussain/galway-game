@@ -1,6 +1,7 @@
 // Street details in the Latin Quarter and around town: buskers with an open
 // guitar case and a few people listening, bunting strung across the
-// pedestrian streets, and tables and parasols outside the cafés and pubs.
+// pedestrian streets, tables and parasols outside the cafés and pubs, and a
+// front door for every shop with a sign.
 import * as THREE from 'three';
 import { makeCharacter } from './player.js';
 import { Kit, boxM } from './landmarks.js';
@@ -42,6 +43,7 @@ export class Details {
     const m = {
       wood: lam('#9a5a2a'), dark: lam('#2a1d14'), velvet: lam('#7a1f2b'), metal: lam('#4a4f55'),
       table: lam('#e8e2d2'), chair: lam('#3a3a3a'), string: lam('#222222'),
+      glassDoor: lam('#2b3540'), brass: lam('#c9a54c', { emissive: '#2a1c04' }),
       flags: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
     };
     const peds = map.roads.filter((r) => r.k === 'pedestrian' && r.n && Math.hypot(r.p[0] - TOWN[0], r.p[1] - TOWN[1]) < 520);
@@ -171,8 +173,21 @@ export class Details {
         tables++;
       }
     });
+    // a front door for every shop and pub with a sign, at one end of the frontage
+    const DOORS = ['#1f3d2b', '#7a1f2b', '#1c2a4a', '#151515', '#6b4f32', '#2b4a5a', '#c4473a'];
+    fronts.forEach((f, i) => {
+      if (f.w < 1.6) return;
+      const tx = -f.nz, tz = f.nx, s = (i % 2 ? 1 : -1) * Math.max(0, f.w / 2 - 0.65);
+      const x = f.x + tx * s, z = f.z + tz * s, rot = Math.atan2(-tz, tx);
+      const dm = m['d' + (i % DOORS.length)] || (m['d' + (i % DOORS.length)] = lam(DOORS[i % DOORS.length]));
+      k.add(m.table, boxM(1.2, 2.4, 0.06), x + f.nx * 0.03, 1.2, z + f.nz * 0.03, rot); // painted surround
+      k.add(dm, boxM(1.0, 2.2, 0.08), x + f.nx * 0.06, 1.1, z + f.nz * 0.06, rot);
+      k.add(m.glassDoor, boxM(0.62, 0.8, 0.04), x + f.nx * 0.11, 1.6, z + f.nz * 0.11, rot);
+      k.add(m.brass, boxM(0.05, 0.16, 0.05), x + f.nx * 0.12 + tx * 0.36, 1.05, z + f.nz * 0.12 + tz * 0.36);
+    });
+
     this.group.add(k.build());
-    this.counts = { buskers: this.buskers.length, flags: pos.length / 9, tables };
+    this.counts = { buskers: this.buskers.length, flags: pos.length / 9, tables, doors: fronts.length };
   }
 
   // strumming, and the listeners shifting their weight
