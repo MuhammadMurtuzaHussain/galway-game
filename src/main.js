@@ -21,8 +21,12 @@ const setStatus = (s) => { status.textContent = s; };
 const frame = () => new Promise((r) => setTimeout(r, 16));
 
 const canvas = document.getElementById('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+// Phones and tablets get a lighter setup; everything adapts its resolution to the frame rate.
+const PHONE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
+const MAX_PR = Math.min(devicePixelRatio, PHONE ? 1.25 : 1.5);
+let pixelRatio = MAX_PR;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !PHONE, powerPreference: 'high-performance' });
+renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -69,13 +73,14 @@ await frame();
 
 setStatus('Lighting the Prom…');
 const sky = new Sky(scene, renderer);
+if (PHONE) sky.sun.shadow.mapSize.set(1024, 1024);
 const input = new Input(canvas);
 const player = new Player(scene, collision, ground.isWater, map.bounds);
 const follow = new FollowCamera(camera, collision);
 const hud = new Hud(map, ground.radar);
-const life = new Life(scene, map, collision, ground.isWater);
+const life = new Life(scene, map, collision, ground.isWater, PHONE ? { people: 55, cars: 18, buses: 3, gulls: 12 } : undefined);
 const details = new Details(scene, map, collision, signs.userData.fronts);
-const weather = new Weather(scene);
+const weather = new Weather(scene, PHONE ? 2500 : 5000);
 const sound = new Sound();
 const pubs = map.pois.filter((p) => p[2] === 'pub' || p[2] === 'bar');
 const mix = { sea: 0, height: 0, car: Infinity, gull: Infinity, gullPan: 0, pub: Infinity, busker: Infinity, rain: 0 };
@@ -128,7 +133,7 @@ follow.yaw = player.heading + Math.PI;
 follow.target.set(spawn[0], 1.5, spawn[1]);
 
 // Real light pools under the few street lamps nearest the player.
-const lampLights = Array.from({ length: 6 }, () => {
+const lampLights = Array.from({ length: PHONE ? 2 : 6 }, () => {
   const l = new THREE.PointLight('#ffc477', 0, 24, 1.6);
   scene.add(l);
   return l;
@@ -277,7 +282,12 @@ function doEmote(k) {
   player.emote = { k, t: 0 };
   net.send({ t: 'emote', e: k });
 }
-document.getElementById('emote-bar').addEventListener('click', (e) => e.target.dataset?.e && doEmote(e.target.dataset.e));
+const muteBtn = document.getElementById('mute-btn');
+muteBtn.textContent = sound.muted ? 'Sound off' : 'Sound on';
+document.getElementById('emote-bar').addEventListener('click', (e) => {
+  if (e.target.dataset?.e) doEmote(e.target.dataset.e);
+  if (e.target.id === 'mute-btn') e.target.textContent = sound.toggleMute() ? 'Sound off' : 'Sound on';
+});
 
 // who's online; click a name to go to them
 const playersEl = document.getElementById('players');
@@ -349,6 +359,23 @@ const help = document.getElementById('help');
 const fps = document.getElementById('fps');
 let last = performance.now(), fpsAcc = 0, fpsN = 0;
 
+// Drop the render resolution while the frame rate is low, creep back up when it recovers.
+let slow = 0, fast = 0;
+function adaptResolution(rate) {
+  if (document.hidden) return;
+  slow = rate < 45 ? slow + 1 : 0;
+  fast = rate > 57 ? fast + 1 : 0;
+  let pr = pixelRatio;
+  if (slow >= 4 && pr > 0.6) pr = Math.max(0.6, pr - 0.15);
+  if (fast >= 12 && pr < MAX_PR) pr = Math.min(MAX_PR, pr + 0.1);
+  if (pr !== pixelRatio) {
+    pixelRatio = pr;
+    renderer.setPixelRatio(pr);
+    renderer.setSize(innerWidth, innerHeight);
+    slow = fast = 0;
+  }
+}
+
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
@@ -357,7 +384,11 @@ function loop(now) {
   if (started) {
     if ((input.pressed.has('Enter') || input.pressed.has('NumpadEnter')) && !chatOpen()) openChat();
     if (input.pressed.has('KeyH')) help.classList.toggle('hidden');
-    if (input.pressed.has('KeyM')) hud.flash(sound.toggleMute() ? 'Sound off' : 'Sound on');
+    if (input.pressed.has('KeyM')) {
+      const off = sound.toggleMute();
+      hud.flash(off ? 'Sound off' : 'Sound on');
+      muteBtn.textContent = off ? 'Sound off' : 'Sound on';
+    }
     if (input.pressed.has('Tab')) togglePlayers();
     if (input.pressed.has('KeyR')) {
       const o = weather.toggle();
@@ -403,12 +434,14 @@ function loop(now) {
 
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) {
-    fps.textContent = Math.round(fpsN / fpsAcc) + ' fps';
+    const rate = fpsN / fpsAcc;
+    fps.textContent = Math.round(rate) + ' fps';
     fpsAcc = 0; fpsN = 0;
+    adaptResolution(rate);
   }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
 // handy for debugging from the console
-Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life, sound, mix, details, weather } });
+Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life, sound, mix, details, weather, quality: () => ({ PHONE, pixelRatio }) } });

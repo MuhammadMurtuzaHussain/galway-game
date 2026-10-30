@@ -30,7 +30,8 @@ name tags, and Enter opens chat. No accounts.
   works, just on your own.
 
 Controls: WASD move · Shift sprint · Space jump · mouse look (click to lock) · wheel zoom ·
-Q/E turn camera · T skip 2 hours · H hide help · 1–9 fast travel · Enter chat. Touch: left thumb moves, right thumb looks, tap right to jump.
+Q/E turn camera · T skip 2 hours · H hide help · 1–9 fast travel · Enter chat · Tab players
+(click a name to go to them) · Z wave · X dance · C sit · M sound · R rain. Touch: left thumb moves, right thumb looks, tap right to jump.
 
 Things to do: climb Blackrock diving tower and jump off the board, swim back to the beach,
 walk the Prom to the end and kick the wall, stand at the water at the Claddagh and the swans
@@ -60,7 +61,11 @@ Change the area by editing `BBOX` in `scripts/fetch-osm.mjs` and re-running both
 | `src/sky.js` | Sky, sun, fog, day/night cycle |
 | `src/hud.js` | Radar, area names, street names, clock |
 | `src/input.js` | Keyboard, mouse, touch |
-| `src/net.js` | Multiplayer client: other players, name tags, chat |
+| `src/net.js` | Multiplayer client: other players, name tags, chat bubbles, emotes |
+| `src/life.js` | Pedestrians (with umbrellas), cars and buses driving on the left, seagulls |
+| `src/details.js` | Buskers, bunting, café tables and parasols, shop doors |
+| `src/sound.js` | Synthesised sound: sea, wind, traffic, gulls, rain, pub sessions, buskers |
+| `src/weather.js` | Shared rain showers (same for everyone online) |
 | `server/rooms.mjs` | Multiplayer rooms (WebSockets): positions 10×/s, chat with a rate limit, 40 per room |
 | `server/index.mjs` | Standalone multiplayer server for hosting (`npm run server`) |
 
@@ -87,4 +92,5 @@ Map data © OpenStreetMap contributors (ODbL). The on-screen credit must stay.
    Long Walk colours, Leisureland~~ ✅
    Maybe later: Nimmo's Pier and Mutton Island lighthouse, the Claddagh church, Galway City Museum
 3. ~~Multiplayer: nicknames, see each other, chat~~ ✅ (plain WebSockets), live online ✅
-4. Extras: bikes or cars, NPC pedestrians, seagulls and sea sounds, radio
+4. ~~Life: pedestrians, traffic, seagulls, sound, weather, buskers~~ ✅
+5. Ideas: drivable cars or bikes, a Galway hooker you can sail, the Galway Races, night-time pub interiors
