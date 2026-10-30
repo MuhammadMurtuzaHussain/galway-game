@@ -1,6 +1,6 @@
 // Hand-built models of Galway's landmarks, placed where OpenStreetMap has them:
 // Spanish Arch, the Cathedral dome, the Quincentennial Fountain and Browne
-// Doorway in Eyre Square, Lynch's Castle, the Hall of the Red Earl, Salmon
+// Doorway in Eyre Square, Lynch's Castle, the University Quadrangle, the Hall of the Red Earl, Salmon
 // Weir Bridge and the weir, hookers and swans at the Claddagh, the Long Walk
 // colours, Leisureland, Blackrock diving tower (climbable), and the Prom
 // railings with the wall at the Blackrock end that everyone kicks.
@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Map buildings that a model here replaces (left out of the generic extrusion).
-export const REPLACED_BUILDINGS = new Set(['Spanish Arch', 'Galway Cathedral', "Lynch's Castle", 'Hall of the Red Earl']);
+export const REPLACED_BUILDINGS = new Set(['Spanish Arch', 'Galway Cathedral', "Lynch's Castle", 'Hall of the Red Earl', 'Quadrangle']);
 
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
@@ -214,7 +214,7 @@ function footprint(k, b) {
     g.rotateX(-Math.PI / 2);
     k.add(mat, g, 0, y0, 0);
   };
-  return { pts, edges, extrude };
+  return { pts, edges, grown, extrude };
 }
 
 function cathedral(k, m, b) {
@@ -417,6 +417,146 @@ function hallOfTheRedEarl(k, m, b) {
     if (!clear(u, v)) continue;
     k.box(m.stone, u - 0.4, u + 0.4, 0, 0.7, v - 0.4, v + 0.4);
     k.rect(u - 0.4, u + 0.4, v - 0.4, v + 0.4, 0.7);
+  }
+}
+
+// Drop ring points that sit within `tol` of the line through their neighbours.
+function simplifyRing(flat, tol) {
+  let pts = [];
+  for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i + 1]]);
+  for (let changed = true; changed && pts.length > 4; ) {
+    changed = false;
+    for (let i = 0; i < pts.length && pts.length > 4; i++) {
+      const a = pts[(i + pts.length - 1) % pts.length], p = pts[i], c = pts[(i + 1) % pts.length];
+      const dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz) || 1;
+      if (Math.abs((p[0] - a[0]) * dz - (p[1] - a[1]) * dx) / l < tol) { pts.splice(i, 1); changed = true; i--; }
+    }
+  }
+  return pts.flat();
+}
+
+function quadrangle(k, m, b) {
+  // University of Galway's Quadrangle (1849): Tudor Gothic limestone ranges
+  // round a courtyard, steep slate roofs, pointed windows, and the clock
+  // tower over the gateway on the University Road side.
+  const H = 10.5;
+  const rel = (flat) => flat.map((v, i) => v - (i % 2 ? k.oz : k.ox));
+  const outerF = simplifyRing(b.p, 1.2);
+  const holesF = (b.holes || []).map((h) => simplifyRing(h, 1.2));
+  const outer = footprint(k, { p: outerF });
+  const toShape = (flat) => {
+    const r = rel(flat), out = [];
+    for (let i = 0; i < r.length; i += 2) out.push(new THREE.Vector2(r[i], -r[i + 1]));
+    return out;
+  };
+  const shape = new THREE.Shape(toShape(outerF));
+  for (const h of holesF) shape.holes.push(new THREE.Path(toShape(h)));
+  const solid = (depth) => {
+    const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+    g.rotateX(-Math.PI / 2);
+    return g;
+  };
+  k.add(m.stone, solid(H));
+  k.add(m.slate, solid(0.1), 0, H, 0); // flat roof under the slopes
+  k.collision.addRing(b.p, H + 3);
+  for (const h of b.holes || []) k.collision.addRing(h, H + 3);
+
+  // slate roofs: up from the outer wall to a ridge 5 m in, and down again
+  const ring = (pts) => pts.map(([u, v]) => [u, v]);
+  const O = ring(outer.pts), R = outer.grown(-5), I = outer.grown(-10);
+  const roof = [];
+  const tri = (a, b2, c) => roof.push(...a, ...b2, ...c);
+  for (let i = 0; i < O.length; i++) {
+    const j = (i + 1) % O.length;
+    const o0 = [O[i][0], H, O[i][1]], o1 = [O[j][0], H, O[j][1]];
+    const r0 = [R[i][0], H + 4.2, R[i][1]], r1 = [R[j][0], H + 4.2, R[j][1]];
+    const i0 = [I[i][0], H, I[i][1]], i1 = [I[j][0], H, I[j][1]];
+    tri(o0, o1, r1); tri(o0, r1, r0); tri(r0, r1, i1); tri(r0, i1, i0);
+  }
+  const rg = new THREE.BufferGeometry();
+  rg.setAttribute('position', new THREE.Float32BufferAttribute(roof, 3));
+  rg.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((roof.length / 3) * 2).fill(0), 2));
+  rg.computeVertexNormals();
+  k.add(m.slate, rg);
+
+  // pointed windows, two floors, on every long enough face
+  const lancet = (u, v, y, rot, face) => {
+    k.add(m.dressed, boxM(1.3, 2.5, 0.14), u, y, v, rot);
+    k.add(m.glass, boxM(0.95, 1.9, 0.2), u, y - 0.15, v, rot);
+    const tip = boxM(0.67, 0.67, 0.2);
+    tip.rotateZ(Math.PI / 4);
+    k.add(m.glass, tip, u, y + 0.8, v, rot);
+    k.add(m.dressed, boxM(1.5, 0.14, 0.3), u + Math.sin(face) * 0.05, y - 1.25, v + Math.cos(face) * 0.05, rot); // sill
+  };
+  const faces = [...outer.edges.map((e) => ({ e, sign: 1 }))];
+  for (const h of holesF) for (const e of footprint(k, { p: h }).edges) faces.push({ e, sign: -1 }); // courtyard side faces in
+  for (const { e, sign } of faces) {
+    if (e.len < 4) continue;
+    const n = Math.floor(e.len / 3.4);
+    for (let j = 0; j < n; j++) {
+      const t = (j + 0.5) * (e.len / n);
+      for (const y of [2.9, 7.2]) {
+        const [u, v] = e.at(t, 0.05 * sign);
+        lancet(u, v, y, e.rot, e.face + (sign < 0 ? Math.PI : 0));
+      }
+    }
+  }
+  // pinnacles on the outer corners
+  for (const [u, v] of outer.pts) {
+    k.box(m.dressed, u - 0.3, u + 0.3, H, H + 1.8, v - 0.3, v + 0.3);
+    k.add(m.dressed, new THREE.ConeGeometry(0.42, 1.2, 4), u, H + 2.4, v);
+  }
+
+  // the clock tower, on the outer face that looks most to the east (University Road)
+  const e = outer.edges.filter((x) => x.len > 20).reduce((a, x) => (x.nu > a.nu ? x : a));
+  const tc = e.len / 2, TW = 8, TD = 9, TH = 25;
+  const at = (along, out) => e.at(tc + along, out);
+  const [cu, cv] = at(0, 1.5 - TD / 2);
+  k.add(m.stone, boxM(TW, TH, TD), cu, TH / 2, cv, e.rot);
+  for (const y of [H, 18.5]) k.add(m.dressed, boxM(TW + 0.3, 0.35, TD + 0.3), cu, y, cv, e.rot);
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, o]) => at((a * TW) / 2, 1.5 - TD / 2 + (o * TD) / 2));
+  for (let i = 0; i < 4; i++) k.wall(...corners[i], ...corners[(i + 1) % 4], TH + 3);
+  // battlements and four octagonal corner turrets with spires
+  for (let a = -TW / 2 + 0.4; a <= TW / 2 - 0.4; a += 1.2) {
+    for (const o of [1.5 - 0.25, 1.5 - TD + 0.25]) { const [u, v] = at(a, o); k.add(m.stone, boxM(0.6, 0.8, 0.5), u, TH + 0.4, v, e.rot); }
+  }
+  for (const [u, v] of corners) {
+    k.add(m.stone, new THREE.CylinderGeometry(0.85, 0.95, TH + 3.2, 8), u, (TH + 3.2) / 2, v);
+    k.add(m.dressed, new THREE.ConeGeometry(0.95, 2.2, 8), u, TH + 4.3, v);
+  }
+  // gateway: pointed arch with iron gates
+  const arch = new THREE.Shape();
+  arch.moveTo(-1.7, 0);
+  arch.lineTo(-1.7, 3.1);
+  arch.quadraticCurveTo(-1.7, 4.6, 0, 5.3);
+  arch.quadraticCurveTo(1.7, 4.6, 1.7, 3.1);
+  arch.lineTo(1.7, 0);
+  const ag = new THREE.ShapeGeometry(arch, 8);
+  ag.rotateY(e.face);
+  const [gu, gv] = at(0, 1.53);
+  k.add(m.shadow, ag, gu, 0, gv);
+  for (let a = -1.5; a <= 1.51; a += 0.25) { const [u, v] = at(a, 1.58); k.add(m.steel, boxM(0.05, 3.6, 0.05), u, 1.8, v, e.rot); }
+  for (const y of [0.3, 3.5]) { const [u, v] = at(0, 1.58); k.add(m.steel, boxM(3.3, 0.08, 0.06), u, y, v, e.rot); }
+  const [wu, wv] = at(0, 1.55);
+  lancet(wu, wv, 12.5, e.rot, e.face);
+  // clock faces front and back
+  for (const out of [1.56, 1.5 - TD - 0.06]) {
+    const s = out > 0 ? 1 : -1;
+    const [u, v] = at(0, out);
+    const disc = new THREE.CylinderGeometry(1.15, 1.15, 0.08, 24);
+    disc.rotateX(Math.PI / 2);
+    k.add(m.clock, disc, u, 21.3, v, e.rot);
+    const rim = new THREE.TorusGeometry(1.2, 0.09, 4, 24);
+    k.add(m.gold, rim, u, 21.3, v, e.rot);
+    const [hu, hv] = at(0, out + s * 0.06);
+    const hour = boxM(0.1, 0.62, 0.03);
+    hour.translate(0, 0.28, 0);
+    hour.rotateZ(-1.2);
+    k.add(m.black, hour, hu, 21.3, hv, e.rot);
+    const minute = boxM(0.07, 0.95, 0.03);
+    minute.translate(0, 0.45, 0);
+    minute.rotateZ(0.35);
+    k.add(m.black, minute, hu, 21.3, hv, e.rot);
   }
 }
 
@@ -868,6 +1008,8 @@ export function buildLandmarks(map, collision, isWater) {
     beak: lam({ color: '#e57a2a' }),
     black: lam({ color: '#141414' }),
     sign: new THREE.MeshBasicMaterial({ map: signTexture('LEISURELAND', '#1d5fae', '#ffffff') }),
+    slate: lam({ color: '#4a4f57', side: THREE.DoubleSide }),
+    clock: lam({ color: '#f1ede2' }),
   };
 
   const group = new THREE.Group();
@@ -886,6 +1028,7 @@ export function buildLandmarks(map, collision, isWater) {
   place(browneDoorway, -45.5, -26.8, -4.3, 18.8);
   const byName = (n) => map.buildings.filter((b) => b.n === n);
   for (const b of byName("Lynch's Castle")) place((k, mm) => lynchsCastle(k, mm, b), b.p[0], b.p[1], 1, 0);
+  for (const b of byName('Quadrangle')) place((k, mm) => quadrangle(k, mm, b), b.p[0], b.p[1], 1, 0);
   for (const b of byName('Hall of the Red Earl')) place((k, mm) => hallOfTheRedEarl(k, mm, b), b.p[0], b.p[1], 1, 0);
   const pool = byName('Leisureland').sort((a, b) => b.p.length - a.p.length)[0];
   if (pool) place((k, mm) => leisureland(k, mm, pool), pool.p[0], pool.p[1], 1, 0);

@@ -15,11 +15,61 @@ const PALETTES = {
 };
 const ROOF_PITCHED = ['#4b4f57', '#55514c', '#3f434b', '#5c5a58', '#6b4a3e'];
 const ROOF_FLAT = ['#6f6c66', '#5d5a55', '#77736b', '#66655f'];
+const POT = new THREE.Color('#9a5a3c');
+const shade = (c, f) => c.clone().multiplyScalar(f);
 const MAJOR = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'secondary_link']);
 const FOOT = new Set(['footway', 'path', 'cycleway', 'steps', 'track', 'pedestrian']);
 
 const col = (hex) => new THREE.Color(hex);
 const pick = (arr, seed) => arr[seed % arr.length];
+// OSM colour tags are hex or CSS names; ignore anything else
+const osmColour = (c) => (c && (/^#[0-9a-f]{6}$/i.test(c) || THREE.Color.NAMES[c.toLowerCase()] !== undefined) ? c.toLowerCase() : null);
+const PITCHED_SHAPES = new Set(['gabled', 'hipped', 'half-hipped', 'saltbox', 'pyramidal', 'gambrel', 'mansard']);
+
+// Smallest rectangle around a ring, as corners [A, B, C, D] with A→B along the
+// long side, plus how much of it the ring fills (1 = the ring is a rectangle).
+function rectOf(ring) {
+  const n = ring.length / 2;
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += ring[i * 2] * ring[j * 2 + 1] - ring[j * 2] * ring[i * 2 + 1];
+  }
+  area = Math.abs(area) / 2;
+  let best = null;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    let ux = ring[j * 2] - ring[i * 2], uz = ring[j * 2 + 1] - ring[i * 2 + 1];
+    const l = Math.hypot(ux, uz);
+    if (l < 0.5) continue;
+    ux /= l; uz /= l;
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (let k = 0; k < n; k++) {
+      const x = ring[k * 2], z = ring[k * 2 + 1];
+      const a = x * ux + z * uz, b = -x * uz + z * ux;
+      a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b);
+    }
+    const ra = (a1 - a0) * (b1 - b0);
+    if (!best || ra < best.ra) best = { ra, ux, uz, a0, a1, b0, b1 };
+  }
+  if (!best) return null;
+  const { ux, uz, a0, a1, b0, b1 } = best;
+  const at = (a, b) => [a * ux - b * uz, a * uz + b * ux];
+  let corners = [at(a0, b0), at(a1, b0), at(a1, b1), at(a0, b1)];
+  if (a1 - a0 < b1 - b0) corners = [corners[1], corners[2], corners[3], corners[0]];
+  return { corners, fill: area / best.ra, long: Math.max(a1 - a0, b1 - b0), short: Math.min(a1 - a0, b1 - b0) };
+}
+
+// Upright box on a footprint of four (x, z) corners, sides and top only.
+function prism(g, q, y0, y1, color) {
+  for (let i = 0; i < 4; i++) {
+    const a = q[i], b = q[(i + 1) % 4];
+    g.vert(a[0], y0, a[1], 0, 0, color); g.vert(b[0], y0, b[1], 1, 0, color); g.vert(b[0], y1, b[1], 1, 1, color);
+    g.vert(a[0], y0, a[1], 0, 0, color); g.vert(b[0], y1, b[1], 1, 1, color); g.vert(a[0], y1, a[1], 0, 1, color);
+  }
+  g.vert(q[0][0], y1, q[0][1], 0, 0, color); g.vert(q[2][0], y1, q[2][1], 1, 1, color); g.vert(q[1][0], y1, q[1][1], 1, 0, color);
+  g.vert(q[0][0], y1, q[0][1], 0, 0, color); g.vert(q[3][0], y1, q[3][1], 0, 1, color); g.vert(q[2][0], y1, q[2][1], 1, 1, color);
+}
 
 class Geo {
   constructor() {
@@ -134,7 +184,7 @@ export function buildCity(map, tex, collision, isWater) {
     const chunk = chunkOf(cx, cz);
     const dTown = Math.hypot(cx - TOWN_CENTRE[0], cz - TOWN_CENTRE[1]);
     let style = b.k === 'shed' ? 'plain' : b.k === 'church' ? 'church' : b.k === 'house' ? 'house' : dTown < 900 ? 'town' : b.h > 11 ? 'town' : 'house';
-    const color = col(b.c || pick(PALETTES[style], b.s));
+    const color = col(b.c || osmColour(b.bc) || pick(PALETTES[style], b.s));
     const h = b.h;
 
     const all = [ring, ...holes];
@@ -149,35 +199,75 @@ export function buildCity(map, tex, collision, isWater) {
       for (const r of all) wall(geo(chunk, 'plain'), r, 0, h, 4, color, 4);
     }
 
-    // Roof
+    // Roof: pitched (gabled, hipped or pyramid) where OSM says so, or on small
+    // near-rectangular buildings; otherwise flat behind a parapet.
     const n = ring.length / 2;
-    const P = (i) => [ring[(i % n) * 2], ring[(i % n) * 2 + 1]];
-    const lenAB = n === 4 ? Math.hypot(P(1)[0] - P(0)[0], P(1)[1] - P(0)[1]) : 0;
-    const lenBC = n === 4 ? Math.hypot(P(2)[0] - P(1)[0], P(2)[1] - P(1)[1]) : 0;
-    const pitched = n === 4 && !holes.length && style !== 'plain' && h < 16 && Math.min(lenAB, lenBC) > 2.5 && Math.max(lenAB, lenBC) < 60;
+    const rect = holes.length ? null : rectOf(ring);
+    const tagged = b.rs && b.rs !== 'flat';
+    const wantPitch = tagged ? PITCHED_SHAPES.has(b.rs) || b.rs === 'round' : !b.rs && style !== 'plain' && h < 16;
+    const pitched = rect && wantPitch && rect.fill > (tagged ? 0.72 : 0.86) && rect.short > 2.5 && rect.long < 60;
     const roofG = geo(chunk, 'roof');
     if (pitched) {
-      const roofCol = col(pick(ROOF_PITCHED, b.s >> 3));
-      let [A, B, C, D] = lenAB >= lenBC ? [P(0), P(1), P(2), P(3)] : [P(1), P(2), P(3), P(0)];
-      const short = Math.min(lenAB, lenBC);
+      const roofCol = col(osmColour(b.rc) || pick(ROOF_PITCHED, b.s >> 3));
+      // a true quad keeps its own corners; anything else uses its bounding rectangle
+      const P = (i) => [ring[(i % n) * 2], ring[(i % n) * 2 + 1]];
+      let [A, B, C, D] = rect.corners;
+      if (n === 4) {
+        const lenAB = Math.hypot(P(1)[0] - P(0)[0], P(1)[1] - P(0)[1]), lenBC = Math.hypot(P(2)[0] - P(1)[0], P(2)[1] - P(1)[1]);
+        [A, B, C, D] = lenAB >= lenBC ? [P(0), P(1), P(2), P(3)] : [P(1), P(2), P(3), P(0)];
+      }
+      const short = rect.short;
       const rh = Math.min(short * 0.38, 3.2);
-      const R1 = [(B[0] + C[0]) / 2, h + rh, (B[1] + C[1]) / 2];
-      const R2 = [(D[0] + A[0]) / 2, h + rh, (D[1] + A[1]) / 2];
+      let R1 = [(B[0] + C[0]) / 2, h + rh, (B[1] + C[1]) / 2];
+      let R2 = [(D[0] + A[0]) / 2, h + rh, (D[1] + A[1]) / 2];
+      const hip = b.rs === 'hipped' || b.rs === 'half-hipped' || b.rs === 'mansard';
+      if (b.rs === 'pyramidal') {
+        const m = [(A[0] + C[0]) / 2, h + rh, (A[1] + C[1]) / 2];
+        R1 = R2 = m;
+      } else if (hip) {
+        // pull the ridge ends in so the short ends slope too
+        const k = Math.min(0.45, (short * 0.5) / rect.long);
+        const r1 = [...R1], r2 = [...R2];
+        R1 = [r1[0] + (r2[0] - r1[0]) * k, r1[1], r1[2] + (r2[2] - r1[2]) * k];
+        R2 = [r2[0] + (r1[0] - r2[0]) * k, r2[1], r2[2] + (r1[2] - r2[2]) * k];
+      }
       const a = [A[0], h, A[1]], bb = [B[0], h, B[1]], c = [C[0], h, C[1]], d = [D[0], h, D[1]];
       const uvw = (p) => [p[0] / 3, p[2] / 3];
-      for (const [p, q, r] of [[a, bb, R1], [a, R1, R2], [c, d, R2], [c, R2, R1]]) {
+      const roofTris = [[a, bb, R1], [a, R1, R2], [c, d, R2], [c, R2, R1]];
+      const ends = [[bb, c, R1], [d, a, R2]];
+      if (hip || b.rs === 'pyramidal') roofTris.push(...ends);
+      for (const [p, q, r] of roofTris) {
         const ux = q[0] - p[0], uz = q[2] - p[2], vx = r[0] - p[0], vz = r[2] - p[2];
         const tri = uz * vx - ux * vz < 0 ? [p, r, q] : [p, q, r];
         for (const v of tri) roofG.vert(...v, ...uvw(v), roofCol);
       }
-      // gable ends use the wall material
-      const gw = geo(chunk, style === 'town' ? 'town' : style === 'church' ? 'plain' : 'house');
-      const vs = style === 'house' ? 2.9 : 3.1;
-      const yb = style === 'town' && dTown < 450 && h >= 6 ? 3.6 : 0;
-      for (const [p, q, r] of [[bb, c, R1], [d, a, R2]]) {
-        gw.vert(...p, 0, (h - yb) / vs, color);
-        gw.vert(...q, 1, (h - yb) / vs, color);
-        gw.vert(...r, 0.5, (h - yb + rh) / vs, color);
+      if (!hip && b.rs !== 'pyramidal') {
+        // gable ends use the wall material
+        const gw = geo(chunk, style === 'town' ? 'town' : style === 'church' ? 'plain' : 'house');
+        const vs = style === 'house' ? 2.9 : 3.1;
+        const yb = style === 'town' && dTown < 450 && h >= 6 ? 3.6 : 0;
+        for (const [p, q, r] of ends) {
+          gw.vert(...p, 0, (h - yb) / vs, color);
+          gw.vert(...q, 1, (h - yb) / vs, color);
+          gw.vert(...r, 0.5, (h - yb + rh) / vs, color);
+        }
+      }
+      // chimney stacks at the ridge ends of houses and terraces
+      if (style !== 'church' && R1 !== R2 && short < 14) {
+        const ex = R2[0] - R1[0], ez = R2[2] - R1[2], el = Math.hypot(ex, ez) || 1;
+        const ax = ex / el, az = ez / el;
+        const stack = shade(color, 0.82);
+        for (const [f, on] of [[0.06, true], [0.94, el > 7 || (b.s & 1) === 0]]) {
+          if (!on) continue;
+          const x = R1[0] + ex * f, z = R1[2] + ez * f;
+          const q = [[-0.55, -0.35], [0.55, -0.35], [0.55, 0.35], [-0.55, 0.35]].map(([u, v]) => [x + ax * v - az * u, z + az * v + ax * u]);
+          prism(geo(chunk, 'plain'), q, h + rh * 0.4, h + rh + 0.9, stack);
+          for (const o of [-0.25, 0.25]) {
+            const px = x - az * o, pz = z + ax * o;
+            const pot = [[-0.1, -0.1], [0.1, -0.1], [0.1, 0.1], [-0.1, 0.1]].map(([u, v]) => [px + u, pz + v]);
+            prism(geo(chunk, 'plain'), pot, h + rh + 0.9, h + rh + 1.25, POT);
+          }
+        }
       }
     } else {
       const roofCol = col(pick(ROOF_FLAT, b.s >> 3));

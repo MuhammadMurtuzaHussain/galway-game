@@ -114,13 +114,18 @@ const AREA_KIND = (t) => {
   return null;
 };
 
-const out = { origin: [LAT0, LON0], buildings: [], roads: [], areas: [], coast: [], lines: [], trees: [] };
+const out = { origin: [LAT0, LON0], buildings: [], roads: [], areas: [], coast: [], lines: [], trees: [], pois: [] };
 let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
 
 for (const el of raw.elements) {
   const t = el.tags || {};
   if (el.type === 'node') {
     if (t.natural === 'tree') out.trees.push(...proj(el));
+    else if (t.name) {
+      // shops, pubs, cafés… for shopfront signs: [x, z, kind, name]
+      const kind = t.amenity || t.shop || t.tourism;
+      out.pois.push([...proj(el), kind, t.name]);
+    }
     continue;
   }
   if (t.indoor || t.location === 'underground' || t.tunnel === 'yes' && !t.building) continue;
@@ -132,6 +137,10 @@ for (const el of raw.elements) {
       const b = { p: p.outer, h: r1(buildingHeight(t, el.id)), s: Math.floor(rand(el.id, 1) * 1000) };
       if (p.holes.length) b.holes = p.holes;
       if (t.name || NAME_FIX[el.id]) b.n = t.name || NAME_FIX[el.id];
+      if (t['roof:shape']) b.rs = t['roof:shape'] === 'pitched' ? 'gabled' : t['roof:shape'];
+      if (t['building:colour']) b.bc = t['building:colour'];
+      if (t['roof:colour']) b.rc = t['roof:colour'];
+      if (t.shop || t.amenity) b.u = t.amenity || t.shop; // what's at street level
       if (t.building === 'church' || t.building === 'cathedral' || t.amenity === 'place_of_worship') b.k = 'church';
       else if (['house', 'detached', 'semidetached_house', 'terrace', 'bungalow', 'residential'].includes(t.building)) b.k = 'house';
       else if (['garage', 'garages', 'shed', 'hut', 'service'].includes(t.building)) b.k = 'shed';
@@ -160,6 +169,7 @@ for (const el of raw.elements) {
     const r = { p: flat(el.geometry), w: ROAD_W[t.highway], k: t.highway };
     if (t.name === 'Salthill Promenade') r.w = 5; // mapped as a footway, but it's a wide prom
     if (t.name) r.n = t.name;
+    if (t['name:ga'] && t['name:ga'] !== t.name) r.ga = t['name:ga'];
     if (t.bridge && t.bridge !== 'no') r.b = 1;
     out.roads.push(r);
     continue;
@@ -176,6 +186,6 @@ out.bounds = [Math.floor(minX - pad), Math.floor(minZ - pad), Math.ceil(maxX + p
 
 await writeFile(new URL('../public/galway.json', import.meta.url), JSON.stringify(out));
 console.log(
-  `buildings ${out.buildings.length}, roads ${out.roads.length}, areas ${out.areas.length}, coast ${out.coast.length}, lines ${out.lines.length}, trees ${out.trees.length / 2}`,
+  `buildings ${out.buildings.length}, roads ${out.roads.length}, areas ${out.areas.length}, coast ${out.coast.length}, lines ${out.lines.length}, trees ${out.trees.length / 2}, places ${out.pois.length}`,
 );
 console.log('bounds', out.bounds);

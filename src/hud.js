@@ -10,6 +10,7 @@ export const ZONES = [
   ['Woodquay', -250, -150, 110],
   ['Galway Cathedral', -553, -77, 80],
   ['University', -720, -230, 200],
+  ['The Quadrangle', -870, -352, 60],
   ['Newcastle', -1000, -450, 260],
   ['Westend', -640, 420, 120],
   ['The Claddagh', -420, 760, 150],
@@ -53,7 +54,7 @@ export class Hud {
     for (const r of map.roads) {
       if (!r.n) continue;
       for (let i = 0; i < r.p.length - 2; i += 2) {
-        const seg = [r.p[i], r.p[i + 1], r.p[i + 2], r.p[i + 3], r.n];
+        const seg = [r.p[i], r.p[i + 1], r.p[i + 2], r.p[i + 3], r.n, r.ga || ''];
         const k = Math.floor((seg[0] + seg[2]) / 2 / CELL) + ',' + Math.floor((seg[1] + seg[3]) / 2 / CELL);
         if (!this.grid.has(k)) this.grid.set(k, []);
         this.grid.get(k).push(seg);
@@ -73,20 +74,20 @@ export class Hud {
   }
 
   streetAt(x, z) {
-    let best = '', bd = 22;
+    let best = '', ga = '', bd = 22;
     const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
     for (let dx = -1; dx <= 1; dx++)
       for (let dz = -1; dz <= 1; dz++) {
         const list = this.grid.get(cx + dx + ',' + (cz + dz));
         if (!list) continue;
-        for (const [ax, az, bx, bz, n] of list) {
+        for (const [ax, az, bx, bz, n, g] of list) {
           const vx = bx - ax, vz = bz - az;
           const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz || 1)));
           const d = Math.hypot(x - ax - vx * t, z - az - vz * t);
-          if (d < bd) { bd = d; best = n; }
+          if (d < bd) { bd = d; best = n; ga = g; }
         }
       }
-    return best;
+    return [best, ga];
   }
 
   // Pop a message in the area-name slot (e.g. after kicking the wall).
@@ -107,10 +108,15 @@ export class Hud {
     this.streetTimer = (this.streetTimer || 0) - dt;
     if (this.streetTimer <= 0) {
       this.streetTimer = 0.25;
-      const s = this.streetAt(x, z);
+      const [s, ga] = this.streetAt(x, z);
       if (s !== this.streetName) {
         this.streetName = s;
         this.el.street.textContent = s;
+        if (ga) {
+          const small = document.createElement('small');
+          small.textContent = ga;
+          this.el.street.append(small);
+        }
       }
     }
     this.el.clock.textContent = clock;

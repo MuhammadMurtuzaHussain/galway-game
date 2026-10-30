@@ -21,6 +21,9 @@ const q = `
   way["amenity"="parking"](${BBOX});
   way["railway"="rail"](${BBOX});
   node["natural"="tree"](${BBOX});
+  node["shop"]["name"](${BBOX});
+  node["amenity"~"^(pub|bar|restaurant|cafe|fast_food|bank|pharmacy|ice_cream|theatre|cinema|library)$"]["name"](${BBOX});
+  node["tourism"~"^(hotel|guest_house|hostel|museum|gallery)$"]["name"](${BBOX});
 );
 out geom;
 `;

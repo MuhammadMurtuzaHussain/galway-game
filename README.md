@@ -40,7 +40,9 @@ come over, watch for salmon jumping at the weir, walk in among the Red Earl's ru
 
 1. `npm run fetch-map`: downloads OpenStreetMap data for the area into `data/osm-raw.json`
 2. `npm run build-map`: converts it to `public/galway.json` (local metres, origin = Eyre Square)
-3. In the browser, `src/city.js` extrudes ~11,800 buildings, lays roads, trees and lamps, and
+3. In the browser, `src/city.js` extrudes ~11,800 buildings (with OSM roof shapes, colours and
+   chimneys), lays roads, trees and lamps, `src/signs.js` hangs ~720 shop signs and ~190 street
+   plates, and
    `src/ground.js` paints the ground and floods Galway Bay from the coastline.
 
 Change the area by editing `BBOX` in `scripts/fetch-osm.mjs` and re-running both scripts.
@@ -49,7 +51,8 @@ Change the area by editing `BBOX` in `scripts/fetch-osm.mjs` and re-running both
 |---|---|
 | `src/main.js` | Startup, game loop, fast travel, lamp lights |
 | `src/city.js` | Buildings, roofs, roads, bridges, piers, trees, street lamps |
-| `src/landmarks.js` | Spanish Arch, Cathedral, Eyre Square fountain and Browne Doorway, Lynch's Castle, Hall of the Red Earl, Salmon Weir Bridge and weir, Claddagh hookers and swans, Long Walk colours, Leisureland sign, Blackrock diving tower, Prom railings, the wall |
+| `src/signs.js` | Shopfront signs with real shop, pub and café names, bilingual street name plates |
+| `src/landmarks.js` | Spanish Arch, Cathedral, Eyre Square fountain and Browne Doorway, Lynch's Castle, University Quadrangle, Hall of the Red Earl, Salmon Weir Bridge and weir, Claddagh hookers and swans, Long Walk colours, Leisureland sign, Blackrock diving tower, Prom railings, the wall |
 | `src/ground.js` | Ground texture, water mask, sea, radar map |
 | `src/textures.js` | Procedural wall, road and roof textures; night window glow |
 | `src/player.js` | Character, movement, swimming, follow camera |

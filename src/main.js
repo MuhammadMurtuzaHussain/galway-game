@@ -9,6 +9,7 @@ import { Sky } from './sky.js';
 import { Hud, ZONES } from './hud.js';
 import { buildLandmarks, paintLongWalk, REPLACED_BUILDINGS } from './landmarks.js';
 import { Net, SHIRTS } from './net.js';
+import { buildSigns } from './signs.js';
 
 const status = document.getElementById('load-status');
 const setStatus = (s) => { status.textContent = s; };
@@ -58,6 +59,8 @@ await frame();
 const landmarks = buildLandmarks(map, collision, ground.isWater);
 for (const w of landmarks.water) ground.addWater(w);
 scene.add(landmarks.group);
+const signs = buildSigns(map, REPLACED_BUILDINGS);
+scene.add(signs);
 await frame();
 
 setStatus('Lighting the Prom…');
@@ -311,4 +314,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy for debugging from the console
-Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net } });
+Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs } });
