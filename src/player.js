@@ -82,6 +82,13 @@ export class Player {
     this.kickT = 0.45;
   }
 
+  setShirt(color) {
+    const scene = this.char.root.parent;
+    scene.remove(this.char.root);
+    this.char = makeCharacter({ shirt: color });
+    scene.add(this.char.root);
+  }
+
   // Height of whatever is underfoot: a platform you can reach, else land or water.
   groundAt(x, z, y) {
     const base = this.isWater(x, z) ? SWIM_Y : 0;
@@ -155,46 +162,53 @@ export class Player {
   }
 
   animate(dt) {
-    const c = this.char;
-    c.root.position.copy(this.pos);
-    c.root.rotation.y = this.heading;
-    const moving = Math.min(1, this.speed / RUN);
-    this.phase += dt * (3 + this.speed * 1.35);
-    const swing = Math.sin(this.phase) * 0.75 * moving;
-    if (this.swimming) {
-      // front crawl when moving, treading water when still
-      const sm = Math.min(1, this.speed / SWIM);
-      const t = this.phase * 0.8;
-      c.body.rotation.x = 1.15 * sm;
-      c.body.position.y = 0.55 * sm + Math.sin(t * 2) * 0.04;
-      c.arms[0].rotation.x = sm ? -t % (Math.PI * 2) : Math.sin(t * 2) * 0.6 - 0.3;
-      c.arms[1].rotation.x = sm ? -(t + Math.PI) % (Math.PI * 2) : -Math.sin(t * 2) * 0.6 - 0.3;
-      c.legs[0].rotation.x = Math.sin(t * 4) * 0.35;
-      c.legs[1].rotation.x = -Math.sin(t * 4) * 0.35;
-    } else if (this.onGround) {
-      c.legs[0].rotation.x = swing;
-      c.legs[1].rotation.x = -swing;
-      c.arms[0].rotation.x = -swing * 0.9;
-      c.arms[1].rotation.x = swing * 0.9;
-      c.body.position.y = Math.abs(Math.cos(this.phase)) * 0.06 * moving + Math.sin(this.phase * 0.4) * 0.008 * (1 - moving);
-      c.body.rotation.x = 0.12 * moving * (this.speed > RUN + 1 ? 1.6 : 1);
-    } else {
-      c.legs[0].rotation.x = 0.5;
-      c.legs[1].rotation.x = -0.2;
-      c.arms[0].rotation.x = c.arms[1].rotation.x = -2.4;
-    }
-    if (this.kickT > 0) {
-      this.kickT = Math.max(0, this.kickT - dt);
-      const k = Math.sin((1 - this.kickT / 0.45) * Math.PI);
-      c.legs[1].rotation.x = -1.5 * k;
-      c.legs[0].rotation.x = 0.15 * k;
-      c.body.rotation.x = -0.15 * k;
-      c.arms[0].rotation.x = 0.6 * k;
-      c.arms[1].rotation.x = -0.6 * k;
-    }
-    c.arms[0].rotation.z = -0.06;
-    c.arms[1].rotation.z = 0.06;
+    animateBody(this, dt);
   }
+}
+
+// Poses a character from its movement state. Shared by the local player and
+// other players in multiplayer (anything with char, pos, heading, speed,
+// phase, swimming, onGround and kickT).
+export function animateBody(p, dt) {
+  const c = p.char;
+  c.root.position.copy(p.pos);
+  c.root.rotation.y = p.heading;
+  const moving = Math.min(1, p.speed / RUN);
+  p.phase += dt * (3 + p.speed * 1.35);
+  const swing = Math.sin(p.phase) * 0.75 * moving;
+  if (p.swimming) {
+    // front crawl when moving, treading water when still
+    const sm = Math.min(1, p.speed / SWIM);
+    const t = p.phase * 0.8;
+    c.body.rotation.x = 1.15 * sm;
+    c.body.position.y = 0.55 * sm + Math.sin(t * 2) * 0.04;
+    c.arms[0].rotation.x = sm ? -t % (Math.PI * 2) : Math.sin(t * 2) * 0.6 - 0.3;
+    c.arms[1].rotation.x = sm ? -(t + Math.PI) % (Math.PI * 2) : -Math.sin(t * 2) * 0.6 - 0.3;
+    c.legs[0].rotation.x = Math.sin(t * 4) * 0.35;
+    c.legs[1].rotation.x = -Math.sin(t * 4) * 0.35;
+  } else if (p.onGround) {
+    c.legs[0].rotation.x = swing;
+    c.legs[1].rotation.x = -swing;
+    c.arms[0].rotation.x = -swing * 0.9;
+    c.arms[1].rotation.x = swing * 0.9;
+    c.body.position.y = Math.abs(Math.cos(p.phase)) * 0.06 * moving + Math.sin(p.phase * 0.4) * 0.008 * (1 - moving);
+    c.body.rotation.x = 0.12 * moving * (p.speed > RUN + 1 ? 1.6 : 1);
+  } else {
+    c.legs[0].rotation.x = 0.5;
+    c.legs[1].rotation.x = -0.2;
+    c.arms[0].rotation.x = c.arms[1].rotation.x = -2.4;
+  }
+  if (p.kickT > 0) {
+    p.kickT = Math.max(0, p.kickT - dt);
+    const k = Math.sin((1 - p.kickT / 0.45) * Math.PI);
+    c.legs[1].rotation.x = -1.5 * k;
+    c.legs[0].rotation.x = 0.15 * k;
+    c.body.rotation.x = -0.15 * k;
+    c.arms[0].rotation.x = 0.6 * k;
+    c.arms[1].rotation.x = -0.6 * k;
+  }
+  c.arms[0].rotation.z = -0.06;
+  c.arms[1].rotation.z = 0.06;
 }
 
 export class FollowCamera {

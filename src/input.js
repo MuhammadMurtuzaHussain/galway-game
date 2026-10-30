@@ -19,7 +19,7 @@ export class Input {
     this.touchJump = false;
 
     addEventListener('keydown', (e) => {
-      if (e.repeat) return;
+      if (e.repeat || e.target.closest?.('input, textarea')) return; // typing a name or chat
       this.keys.add(e.code);
       this.pressed.add(e.code);
       if (['Space', 'ArrowUp', 'ArrowDown', 'Tab'].includes(e.code)) e.preventDefault();
@@ -94,6 +94,11 @@ export class Input {
     this.lookY = this._my * 0.002;
     this.zoom = this._wheel * 0.9;
     this._mx = this._my = this._wheel = 0;
+  }
+
+  // drop held keys, e.g. when the chat box opens
+  release() {
+    this.keys.clear();
   }
 
   endFrame() {

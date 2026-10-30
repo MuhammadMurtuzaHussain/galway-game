@@ -8,10 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "fetch-map": "node scripts/fetch-osm.mjs",
-    "build-map": "node scripts/build-map.mjs"
+    "build-map": "node scripts/build-map.mjs",
+    "server": "node server/index.mjs"
   },
   "dependencies": {
-    "three": "^0.170.0"
+    "three": "^0.170.0",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "vite": "^6.0.7"

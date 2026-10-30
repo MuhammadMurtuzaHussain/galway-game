@@ -8,6 +8,7 @@ import { Input } from './input.js';
 import { Sky } from './sky.js';
 import { Hud, ZONES } from './hud.js';
 import { buildLandmarks, paintLongWalk, REPLACED_BUILDINGS } from './landmarks.js';
+import { Net, SHIRTS } from './net.js';
 
 const status = document.getElementById('load-status');
 const setStatus = (s) => { status.textContent = s; };
@@ -159,6 +160,7 @@ function checkWallKick() {
     wallKicks++;
     try { localStorage.setItem('wallKicks', wallKicks); } catch {}
     player.kick();
+    net.send({ t: 'kick' });
     hud.flash(wallKicks === 1 ? 'Kicked the wall!' : `Kicked the wall ×${wallKicks}`);
   }
 }
@@ -166,6 +168,74 @@ function checkWallKick() {
 // Warm up shaders once so the first frame doesn't hitch.
 sky.update(0, player.pos);
 renderer.compile(scene, camera);
+
+// ---------- Multiplayer: nickname, shirt, chat ----------
+const net = new Net(scene);
+const nick = document.getElementById('nick');
+const shirtsEl = document.getElementById('shirts');
+let shirt = SHIRTS[0];
+try {
+  nick.value = localStorage.getItem('nick') || '';
+  shirt = localStorage.getItem('shirt') || shirt;
+} catch {}
+if (!SHIRTS.includes(shirt)) shirt = SHIRTS[0];
+shirtsEl.innerHTML = SHIRTS.map((c) => `<button type="button" data-c="${c}" style="background:${c}" aria-label="Shirt colour"></button>`).join('');
+const markShirt = () => { for (const b of shirtsEl.children) b.classList.toggle('on', b.dataset.c === shirt); };
+markShirt();
+player.setShirt(shirt);
+shirtsEl.addEventListener('click', (e) => {
+  const c = e.target.dataset?.c;
+  if (!c) return;
+  shirt = c;
+  markShirt();
+  player.setShirt(c);
+});
+
+const chatEl = document.getElementById('chat');
+const chatLog = document.getElementById('chat-log');
+const chatIn = document.getElementById('chat-in');
+function addChat(name, text, color) {
+  const line = document.createElement('div');
+  line.className = name ? 'line' : 'line sys';
+  if (name) {
+    const b = document.createElement('b');
+    b.textContent = name + ': ';
+    b.style.color = color || '#f3ead7';
+    line.append(b);
+  }
+  line.append(text);
+  chatLog.append(line);
+  while (chatLog.children.length > 8) chatLog.firstChild.remove();
+  setTimeout(() => line.classList.add('old'), 10000);
+}
+const chatOpen = () => chatEl.classList.contains('open');
+function openChat() {
+  chatEl.classList.add('open');
+  input.release();
+  if (document.pointerLockElement) document.exitPointerLock();
+  chatIn.focus();
+}
+function closeChat() {
+  chatEl.classList.remove('open');
+  chatIn.value = '';
+  chatIn.blur();
+}
+chatIn.addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const text = chatIn.value.trim();
+    if (text) net.chat(text);
+    closeChat();
+  } else if (e.key === 'Escape') closeChat();
+});
+document.getElementById('chat-btn').addEventListener('click', openChat);
+net.onChat = addChat;
+const onlineEl = document.getElementById('online');
+net.onStatus = () => {
+  onlineEl.classList.toggle('off', net.status !== 'online');
+  onlineEl.textContent = net.status === 'online' ? `${net.count} online` : net.status === 'connecting' ? 'connecting…' : 'offline';
+};
 
 document.getElementById('loading').classList.add('done');
 const title = document.getElementById('title');
@@ -175,9 +245,20 @@ const start = () => {
   started = true;
   title.classList.add('done');
   document.getElementById('hud').classList.add('on');
+  const name = nick.value.trim();
+  try {
+    localStorage.setItem('nick', name);
+    localStorage.setItem('shirt', shirt);
+  } catch {}
+  nick.blur();
+  input.pressed.delete('Enter'); // the Enter that starts the game shouldn't also open chat
+  net.connect(name || 'Galwegian', shirt);
 };
+document.getElementById('who').addEventListener('click', (e) => e.stopPropagation());
 title.addEventListener('click', start);
-addEventListener('keydown', (e) => { if (e.code === 'Enter' || e.code === 'Space') start(); });
+addEventListener('keydown', (e) => {
+  if (e.code === 'Enter' || (e.code === 'Space' && e.target !== nick)) start();
+});
 canvas.addEventListener('touchstart', start, { passive: true });
 
 const help = document.getElementById('help');
@@ -190,6 +271,7 @@ function loop(now) {
   input.update();
 
   if (started) {
+    if ((input.pressed.has('Enter') || input.pressed.has('NumpadEnter')) && !chatOpen()) openChat();
     if (input.pressed.has('KeyH')) help.classList.toggle('hidden');
     if (input.pressed.has('KeyT')) sky.hour = (sky.hour + 2) % 24;
     for (let i = 0; i < FAST_TRAVEL.length; i++) {
@@ -212,6 +294,7 @@ function loop(now) {
   updateLampLights(dt);
   updateSplashes(dt);
   landmarks.update(dt, now / 1000, player.pos);
+  net.update(dt, now, player, camera);
   ground.update(now / 1000);
   hud.update(dt, player, follow.yaw, sky.clock);
 
@@ -228,4 +311,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy for debugging from the console
-Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud } });
+Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net } });
