@@ -12,6 +12,7 @@ import { Net, SHIRTS } from './net.js';
 import { buildSigns } from './signs.js';
 import { Life } from './life.js';
 import { Sound } from './sound.js';
+import { Details } from './details.js';
 
 const status = document.getElementById('load-status');
 const setStatus = (s) => { status.textContent = s; };
@@ -72,9 +73,10 @@ const player = new Player(scene, collision, ground.isWater, map.bounds);
 const follow = new FollowCamera(camera, collision);
 const hud = new Hud(map, ground.radar);
 const life = new Life(scene, map, collision, ground.isWater);
+const details = new Details(scene, map, collision, signs.userData.fronts);
 const sound = new Sound();
 const pubs = map.pois.filter((p) => p[2] === 'pub' || p[2] === 'bar');
-const mix = { sea: 0, height: 0, car: Infinity, gull: Infinity, gullPan: 0, pub: Infinity, rain: 0 };
+const mix = { sea: 0, height: 0, car: Infinity, gull: Infinity, gullPan: 0, pub: Infinity, busker: Infinity, rain: 0 };
 let mixTimer = 0, playersTimer = 0;
 // what the player can hear: how close the sea, pubs, gulls and cars are
 function updateMix(dt) {
@@ -92,6 +94,7 @@ function updateMix(dt) {
     for (let a = 0; a < 8; a++)
       if (ground.isWater(x + Math.cos(a * 0.785) * r, z + Math.sin(a * 0.785) * r)) sea = Math.max(sea, 1 - r / 80);
   mix.sea = player.swimming ? 1 : sea;
+  mix.busker = details.nearestBusker(x, z);
   mix.pub = Infinity;
   for (const p of pubs) mix.pub = Math.min(mix.pub, Math.hypot(p[0] - x, p[1] - z));
 }
@@ -380,6 +383,7 @@ function loop(now) {
   net.update(dt, now, player, camera);
   hud.others = [...net.remotes.values()].filter((r) => r.target).map((r) => ({ x: r.pos.x, z: r.pos.z, color: r.color }));
   life.update(dt, now / 1000, player);
+  details.update(dt, now / 1000, player);
   updateMix(dt);
   sound.update(dt, now / 1000, mix);
   ground.update(now / 1000);
@@ -398,4 +402,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy for debugging from the console
-Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life, sound, mix } });
+Object.assign(window, { game: { scene, player, sky, city, landmarks, map, renderer, camera, collision, ground, follow, hud, net, signs, life, sound, mix, details } });

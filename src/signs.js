@@ -186,6 +186,7 @@ export function buildSigns(map, skipBuildings) {
   const PX = 0.7 / CELL_H; // fascia lettering scale: metres per pixel
 
   // shopfronts
+  const fronts = []; // where each sign went, for café tables and the like
   for (const [x, z, kind, name] of map.pois) {
     const c0 = paintShop(atlas, name, kind);
     let w = c0.w * PX;
@@ -196,6 +197,7 @@ export function buildSigns(map, skipBuildings) {
     const big = kind === 'pub' || kind === 'bar';
     spot.ring.used.push([spot.e, spot.t, w]);
     quad(c0, spot.x, spot.z, spot.nx, spot.nz, big ? 3.15 : 3.05, w, big ? 0.8 : 0.7);
+    fronts.push({ x: spot.x, z: spot.z, nx: spot.nx, nz: spot.nz, w, kind, name });
   }
 
   // street plates where streets meet, on a corner wall facing the street
@@ -242,6 +244,7 @@ export function buildSigns(map, skipBuildings) {
     const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.22, polygonOffset: true, polygonOffsetFactor: -2 });
     group.add(new THREE.Mesh(geo, mat));
   }
+  group.userData.fronts = fronts;
   group.userData.counts = { shops: map.pois.length, plates: placed.length, streets: plates.size, pages: atlas.pages.length };
   return group;
 }

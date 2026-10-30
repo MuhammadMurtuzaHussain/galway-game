@@ -1,6 +1,7 @@
 // Ambient sound, all synthesised (no audio files): the sea, wind, traffic,
-// seagulls, rain, and trad music from the pubs (an original jig on a
-// fiddle-ish voice with guitar chords and a bodhrán). M mutes.
+// seagulls, rain, trad music from the pubs (an original jig on a
+// fiddle-ish voice with guitar chords and a bodhrán) and the buskers'
+// fingerpicked guitar. M mutes.
 const JIG = {
   // MIDI notes, six eighth notes a bar in 6/8; -1 holds the previous note
   tune: [
@@ -14,6 +15,12 @@ const JIG = {
   eighth: 60 / 112 / 3,
 };
 const hz = (m) => 440 * 2 ** ((m - 69) / 12);
+// the buskers: fingerpicked G–D–Em–C, eight notes a bar
+const BUSK = {
+  chords: [[43, 47, 50, 55, 59], [38, 45, 50, 54, 57], [40, 47, 52, 55, 59], [36, 43, 48, 52, 55]],
+  pattern: [0, 2, 3, 4, 3, 2, 1, 3],
+  eighth: 60 / 92 / 2,
+};
 
 export class Sound {
   constructor() {
@@ -63,6 +70,11 @@ export class Sound {
     this.music.connect(this.master);
     this.nextNote = 0;
     this.step = 0;
+    this.busk = ctx.createGain();
+    this.busk.gain.value = 0;
+    this.busk.connect(this.master);
+    this.buskNext = 0;
+    this.buskStep = 0;
   }
 
   toggleMute() {
@@ -94,6 +106,43 @@ export class Sound {
     const pubVol = Math.max(0, 1 - mix.pub / 32) ** 1.5 * 0.5;
     this.set(this.music, pubVol, 0.5);
     if (pubVol > 0.01) this.schedule();
+    const buskVol = Math.max(0, 1 - (mix.busker ?? Infinity) / 38) ** 1.5 * 0.7;
+    this.set(this.busk, buskVol, 0.5);
+    if (buskVol > 0.01) this.scheduleBusk();
+  }
+
+  scheduleBusk() {
+    const ctx = this.ctx;
+    if (this.buskNext < ctx.currentTime) this.buskNext = ctx.currentTime + 0.05;
+    while (this.buskNext < ctx.currentTime + 0.25) {
+      const bar = Math.floor(this.buskStep / 8) % BUSK.chords.length, i = this.buskStep % 8;
+      this.pluck(hz(BUSK.chords[bar][BUSK.pattern[i]] + 12), this.buskNext, i === 0 ? 0.16 : 0.1);
+      if (i === 0) this.pluck(hz(BUSK.chords[bar][0]), this.buskNext, 0.14);
+      this.buskStep++;
+      this.buskNext += BUSK.eighth;
+    }
+  }
+
+  pluck(f, t, vol) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = f;
+    o2.type = 'sawtooth';
+    o2.frequency.value = f * 1.002;
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.25;
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3200, t);
+    lp.frequency.exponentialRampToValueAtTime(700, t + 0.4);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+    o.connect(lp);
+    o2.connect(g2).connect(lp);
+    lp.connect(g).connect(this.busk);
+    o.start(t); o2.start(t);
+    o.stop(t + 1.15); o2.stop(t + 1.15);
   }
 
   // "kee-ow": a rising then falling squeal, two or three times
