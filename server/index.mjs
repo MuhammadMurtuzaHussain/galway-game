@@ -6,7 +6,7 @@ import { attachRooms } from './rooms.mjs';
 const port = process.env.PORT || 2567;
 const server = createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'text/plain' });
-  res.end('galway multiplayer ok\n');
+  res.end(`galway multiplayer ok, ${wss.clients.size} connected\n`);
 });
-attachRooms(server);
+const wss = attachRooms(server);
 server.listen(port, () => console.log(`multiplayer server on :${port}`));
