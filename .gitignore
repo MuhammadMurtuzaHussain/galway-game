@@ -3,3 +3,5 @@ dist/
 .DS_Store
 # raw OSM download (11 MB); recreate with `npm run fetch-map`
 data/osm-raw.json
+.vercel
+.env*

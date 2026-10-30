@@ -4,6 +4,8 @@ A browser exploration game set in real Galway, from Eyre Square through the Lati
 the Claddagh and along the Prom to Blackrock. Low-poly, golden-hour, early-2000s open-world look.
 No missions, just wander.
 
+**Play it:** https://galway-game.vercel.app (send friends the link; add `?room=yourname` for a private room)
+
 ## Run it
 
 ```bash
@@ -18,10 +20,12 @@ name tags, and Enter opens chat. No accounts.
 
 - **Same Wi-Fi:** run `npx vite --host`, then friends open the `Network:` address it prints.
 - **Private room:** add `?room=anything` to the address. Only people with the same room see you.
-- **Online:** the game is static files (`npm run build`, host `dist/` on Vercel) and the
-  multiplayer server is `npm run server` (one small Node process, e.g. a free Render web service).
-  Build the game with `VITE_MP_URL=wss://your-server.onrender.com/mp` so it knows where to connect.
-  Without a server the game still works, just on your own.
+- **Online:** the game is on Vercel (galway-game.vercel.app) and the multiplayer server on
+  Render (galway-game-mp.onrender.com, free plan, Frankfurt). Both redeploy on every push to `main`.
+  The game is built with `VITE_MP_URL=wss://galway-game-mp.onrender.com/mp` (a Vercel env var).
+  Render's free plan sleeps after 15 idle minutes, so the first player of the day waits about a
+  minute for "online" to appear; the game is playable meanwhile. Without a server the game still
+  works, just on your own.
 
 Controls: WASD move · Shift sprint · Space jump · mouse look (click to lock) · wheel zoom ·
 Q/E turn camera · T skip 2 hours · H hide help · 1–9 fast travel · Enter chat. Touch: left thumb moves, right thumb looks, tap right to jump.
@@ -66,7 +70,7 @@ Map data © OpenStreetMap contributors (ODbL). The on-screen credit must stay.
       the Prom railings and wall, Galway Cathedral, the Long Walk houses, Claddagh swans, a Galway Hooker.
 - [ ] **Describe the reel.** I can't open Instagram. Tell me what you liked: camera, vibe, cars, music?
 - [x] **GitHub repo:** private, at github.com/MuhammadMurtuzaHussain/galway-game.
-- [ ] **Hosting accounts** (free tiers are fine): Vercel for the game itself, plus Render or Fly.io later for the multiplayer server.
+- [x] **Hosting:** Vercel (game) and Render (multiplayer server), both live.
 - [ ] **Later: 3–5 friends** for a multiplayer test night.
 - [ ] *Optional:* add `building:levels` to Galway buildings on openstreetmap.org. Every fix there improves the game on the next map rebuild.
 
@@ -77,5 +81,5 @@ Map data © OpenStreetMap contributors (ODbL). The on-screen credit must stay.
    ~~Lynch's Castle, Claddagh swans and hookers, Salmon Weir Bridge, Hall of the Red Earl,
    Long Walk colours, Leisureland~~ ✅
    Maybe later: Nimmo's Pier and Mutton Island lighthouse, the Claddagh church, Galway City Museum
-3. ~~Multiplayer: nicknames, see each other, chat~~ ✅ (plain WebSockets). Next: put it online
+3. ~~Multiplayer: nicknames, see each other, chat~~ ✅ (plain WebSockets), live online ✅
 4. Extras: bikes or cars, NPC pedestrians, seagulls and sea sounds, radio
