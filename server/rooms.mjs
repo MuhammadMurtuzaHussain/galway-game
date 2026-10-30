@@ -72,6 +72,8 @@ class Room {
       this.broadcast({ t: 'chat', id, name: p.name, text });
     } else if (msg.t === 'kick') {
       this.broadcast({ t: 'kick', id }, id);
+    } else if (msg.t === 'emote' && ['wave', 'dance', 'sit'].includes(msg.e)) {
+      this.broadcast({ t: 'emote', id, e: msg.e }, id);
     }
   }
 

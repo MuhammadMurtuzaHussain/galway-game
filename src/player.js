@@ -171,6 +171,7 @@ export class Player {
 // phase, swimming, onGround and kickT).
 export function animateBody(p, dt) {
   const c = p.char;
+  c.body.rotation.y = 0;
   c.root.position.copy(p.pos);
   c.root.rotation.y = p.heading;
   const moving = Math.min(1, p.speed / RUN);
@@ -209,6 +210,39 @@ export function animateBody(p, dt) {
   }
   c.arms[0].rotation.z = -0.06;
   c.arms[1].rotation.z = 0.06;
+  if (p.emote) emote(p, c, dt);
+}
+
+export const EMOTES = { KeyZ: 'wave', KeyX: 'dance', KeyC: 'sit' };
+
+// Wave (a couple of seconds), dance and sit (until you move off).
+function emote(p, c, dt) {
+  const e = p.emote;
+  e.t += dt;
+  if ((e.t > 0.3 && p.speed > 0.6) || p.swimming || (e.k === 'wave' && e.t > 2.4)) {
+    p.emote = null;
+    return;
+  }
+  const t = e.t;
+  if (e.k === 'wave') {
+    c.arms[0].rotation.x = -2.8;
+    c.arms[0].rotation.z = -0.25 + Math.sin(t * 9) * 0.35;
+  } else if (e.k === 'dance') {
+    const b = Math.sin(t * 7);
+    c.body.rotation.y = b * 0.45;
+    c.body.position.y = Math.abs(b) * 0.12;
+    c.arms[0].rotation.x = -1.6 + b * 1.1;
+    c.arms[1].rotation.x = -1.6 - b * 1.1;
+    c.arms[0].rotation.z = -0.5;
+    c.arms[1].rotation.z = 0.5;
+    c.legs[0].rotation.x = b * 0.35;
+    c.legs[1].rotation.x = -b * 0.35;
+  } else if (e.k === 'sit') {
+    c.body.position.y = -0.58;
+    c.body.rotation.x = -0.1;
+    c.legs[0].rotation.x = c.legs[1].rotation.x = -1.45;
+    c.arms[0].rotation.x = c.arms[1].rotation.x = -0.35;
+  }
 }
 
 export class FollowCamera {

@@ -3,7 +3,7 @@ import { makeTextures, nightUniform } from './textures.js';
 import { buildGround } from './ground.js';
 import { buildCity } from './city.js';
 import { CollisionWorld } from './collision.js';
-import { Player, FollowCamera } from './player.js';
+import { Player, FollowCamera, EMOTES } from './player.js';
 import { Input } from './input.js';
 import { Sky } from './sky.js';
 import { Hud, ZONES } from './hud.js';
@@ -75,7 +75,7 @@ const life = new Life(scene, map, collision, ground.isWater);
 const sound = new Sound();
 const pubs = map.pois.filter((p) => p[2] === 'pub' || p[2] === 'bar');
 const mix = { sea: 0, height: 0, car: Infinity, gull: Infinity, gullPan: 0, pub: Infinity, rain: 0 };
-let mixTimer = 0;
+let mixTimer = 0, playersTimer = 0;
 // what the player can hear: how close the sea, pubs, gulls and cars are
 function updateMix(dt) {
   const { x, y, z } = player.pos;
@@ -266,6 +266,55 @@ net.onStatus = () => {
   onlineEl.textContent = net.status === 'online' ? `${net.count} online` : net.status === 'connecting' ? 'connecting…' : 'offline';
 };
 
+// emotes, seen by everyone in the room
+function doEmote(k) {
+  if (player.swimming) return;
+  player.emote = { k, t: 0 };
+  net.send({ t: 'emote', e: k });
+}
+document.getElementById('emote-bar').addEventListener('click', (e) => e.target.dataset?.e && doEmote(e.target.dataset.e));
+
+// who's online; click a name to go to them
+const playersEl = document.getElementById('players');
+function renderPlayers() {
+  const rows = [...net.remotes.values()].filter((r) => r.target);
+  const me = player.pos;
+  playersEl.innerHTML = `<h3>${net.status === 'online' ? net.count + ' online' : 'Offline'}</h3>`;
+  for (const r of rows) {
+    const b = document.createElement('button');
+    const sw = document.createElement('i');
+    sw.style.background = r.color;
+    const name = document.createElement('span');
+    name.textContent = r.name;
+    const far = document.createElement('small');
+    const d = Math.hypot(r.pos.x - me.x, r.pos.z - me.z);
+    far.textContent = d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1) + ' km';
+    b.append(sw, name, far);
+    b.addEventListener('click', () => goTo(r));
+    playersEl.append(b);
+  }
+  const hint = document.createElement('p');
+  hint.textContent = rows.length ? 'Click a name to go to them.' : 'Nobody else here yet. Send friends the link!';
+  playersEl.append(hint);
+}
+function togglePlayers(open = !playersEl.classList.contains('open')) {
+  playersEl.classList.toggle('open', open);
+  if (open) {
+    renderPlayers();
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+}
+function goTo(r) {
+  player.teleport(r.pos.x - Math.sin(r.heading) * 1.5, r.pos.z - Math.cos(r.heading) * 1.5);
+  player.pos.y = r.pos.y;
+  player.heading = r.heading;
+  follow.target.set(player.pos.x, player.pos.y + 1.5, player.pos.z);
+  follow.yaw = player.heading + Math.PI;
+  togglePlayers(false);
+  hud.flash(r.name);
+}
+onlineEl.addEventListener('click', () => togglePlayers());
+
 document.getElementById('loading').classList.add('done');
 const title = document.getElementById('title');
 let started = false;
@@ -304,6 +353,9 @@ function loop(now) {
     if ((input.pressed.has('Enter') || input.pressed.has('NumpadEnter')) && !chatOpen()) openChat();
     if (input.pressed.has('KeyH')) help.classList.toggle('hidden');
     if (input.pressed.has('KeyM')) hud.flash(sound.toggleMute() ? 'Sound off' : 'Sound on');
+    if (input.pressed.has('Tab')) togglePlayers();
+    for (const [code, k] of Object.entries(EMOTES)) if (input.pressed.has(code)) doEmote(k);
+    if (playersEl.classList.contains('open') && (playersTimer -= dt) < 0) { playersTimer = 1; renderPlayers(); }
     if (input.pressed.has('KeyT')) sky.hour = (sky.hour + 2) % 24;
     for (let i = 0; i < FAST_TRAVEL.length; i++) {
       if (input.pressed.has('Digit' + (i + 1))) {
@@ -326,6 +378,7 @@ function loop(now) {
   updateSplashes(dt);
   landmarks.update(dt, now / 1000, player.pos);
   net.update(dt, now, player, camera);
+  hud.others = [...net.remotes.values()].filter((r) => r.target).map((r) => ({ x: r.pos.x, z: r.pos.z, color: r.color }));
   life.update(dt, now / 1000, player);
   updateMix(dt);
   sound.update(dt, now / 1000, mix);

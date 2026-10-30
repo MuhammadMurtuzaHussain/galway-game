@@ -141,6 +141,22 @@ export class Hud {
     c.drawImage(canvas, -(x - x0) * scale, -(z - z0) * scale);
     c.restore();
 
+    // friends: coloured dots, pinned to the rim when they're off the map
+    const cos = Math.cos(yaw), sin = Math.sin(yaw);
+    for (const o of this.others || []) {
+      const dx = (o.x - x) * scale * zoom, dz = (o.z - z) * scale * zoom;
+      let px = dx * cos - dz * sin, py = dx * sin + dz * cos;
+      const d = Math.hypot(px, py), max = R - 14;
+      if (d > max) { px *= max / d; py *= max / d; }
+      c.beginPath();
+      c.arc(R + px, R + py, d > max ? 5 : 6, 0, Math.PI * 2);
+      c.fillStyle = o.color;
+      c.fill();
+      c.lineWidth = 2;
+      c.strokeStyle = '#000';
+      c.stroke();
+    }
+
     // player arrow
     c.save();
     c.translate(R, R);

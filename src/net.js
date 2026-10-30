@@ -14,6 +14,45 @@ function serverUrl() {
   return room ? `${base}?room=${encodeURIComponent(room)}` : base;
 }
 
+// White speech bubble above someone's head, wrapped to three short lines.
+function bubble(text) {
+  const c = document.createElement('canvas');
+  const g = c.getContext('2d');
+  const font = '30px system-ui, sans-serif';
+  g.font = font;
+  const words = text.split(/\s+/), lines = [];
+  let line = '';
+  for (const w of words) {
+    const tryLine = line ? line + ' ' + w : w;
+    if (g.measureText(tryLine).width > 360 && line) { lines.push(line); line = w; }
+    else line = tryLine;
+    if (lines.length === 3) break;
+  }
+  if (line && lines.length < 3) lines.push(line);
+  const w = Math.min(400, Math.max(...lines.map((l) => g.measureText(l).width)) + 36);
+  c.width = Math.ceil(w);
+  c.height = lines.length * 38 + 34;
+  g.font = font;
+  g.fillStyle = 'rgba(255,255,255,0.95)';
+  g.beginPath();
+  g.roundRect(2, 2, c.width - 4, c.height - 20, 14);
+  g.moveTo(c.width / 2 - 10, c.height - 19);
+  g.lineTo(c.width / 2, c.height - 4);
+  g.lineTo(c.width / 2 + 10, c.height - 19);
+  g.fill();
+  g.fillStyle = '#151515';
+  g.textBaseline = 'top';
+  lines.forEach((l, i) => g.fillText(l, 18, 14 + i * 38));
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
+  const k = 0.0075;
+  s.scale.set(c.width * k, c.height * k, 1);
+  s.position.y = 2.6 + (c.height * k) / 2;
+  s.renderOrder = 6;
+  return s;
+}
+
 function nameTag(text, color) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
@@ -97,6 +136,8 @@ export class Net {
     this.lastSend = 0;
     this.lastSent = '';
     this.onChat = null; // (name, text, color) => void
+    this.bubbles = []; // { sprite, parent, until }
+    this.player = null;
     this.onStatus = null; // () => void
   }
 
@@ -171,6 +212,11 @@ export class Net {
       for (const [id, ...s] of msg.p) if (id !== this.id) this.remotes.get(id)?.setState(s);
     } else if (msg.t === 'chat') {
       this.onChat?.(msg.name, msg.text, msg.id === this.id ? this.color : this.remotes.get(msg.id)?.color);
+      const who = msg.id === this.id ? this.player : this.remotes.get(msg.id);
+      if (who) this.say(who, msg.text);
+    } else if (msg.t === 'emote') {
+      const r = this.remotes.get(msg.id);
+      if (r) r.emote = { k: msg.e, t: 0 };
     } else if (msg.t === 'kick') {
       const r = this.remotes.get(msg.id);
       if (!r) return;
@@ -190,7 +236,24 @@ export class Net {
     this.send({ t: 'chat', text });
   }
 
+  // show a speech bubble over someone for a few seconds
+  say(who, text) {
+    const parent = who.char.root;
+    for (const b of this.bubbles) if (b.parent === parent) b.until = 0;
+    const sprite = bubble(text);
+    parent.add(sprite);
+    this.bubbles.push({ sprite, parent, until: performance.now() + 4000 + text.length * 60 });
+  }
+
   update(dt, now, player, camera) {
+    this.player = player;
+    this.bubbles = this.bubbles.filter((b) => {
+      if (now < b.until && b.parent.parent) return true;
+      b.parent.remove(b.sprite);
+      b.sprite.material.map.dispose();
+      b.sprite.material.dispose();
+      return false;
+    });
     if (this.status === 'online' && now - this.lastSend > SEND_MS) {
       const p = player.pos;
       const s = [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +player.heading.toFixed(3), +player.speed.toFixed(2), (player.swimming ? 1 : 0) | (player.onGround ? 2 : 0)];
